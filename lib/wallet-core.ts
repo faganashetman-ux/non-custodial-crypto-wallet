@@ -32,6 +32,7 @@ export function waitForLibs(timeout = 15000): Promise<void> {
 const E = () => window.ethers
 const CJS = () => window.CryptoJS
 
+// === ХЕЛПЕР ДЛЯ ПРОКСИ ===
 function getAbsoluteUrl(url: string): string {
   if (typeof window === 'undefined') return url
   return url.startsWith('/') ? window.location.origin + url : url
@@ -264,6 +265,7 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
   }
 }
 
+// === ИСТОРИЯ ===
 export interface TxRecord {
   hash: string
   timestamp: number
@@ -301,8 +303,8 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } 
     else if (network === 'bsc') {
-      // === ИСПРАВЛЕНО: Бесплатный Blockscout для BSC через наш прокси ===
-      const baseUrl = getAbsoluteUrl(`/proxy/api/blockscout-bsc?address=${address}&offset=20&sort=desc`)
+      // === ПРЯМОЙ ЗАПРОС К БЕСПЛАТНОМУ BLOCKSCOUT (БЕЗ ПРОКСИ!) ===
+      const baseUrl = `https://bsc.blockscout.com/api?address=${address}&offset=20&sort=desc`
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
         fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
@@ -323,7 +325,6 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } 
     else if (network === 'eth') {
-      // Эфир остается на Etherscan V2
       const baseUrl = getAbsoluteUrl(`/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`)
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
