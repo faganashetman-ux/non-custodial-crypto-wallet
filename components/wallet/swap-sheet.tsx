@@ -9,7 +9,7 @@ import { NETWORKS } from '@/lib/networks'
 import { CoinIcon } from './coin-icon'
 import { useI18n, type Dictionary } from '@/lib/i18n'
 
-const GAS_RESERVE: Record<string, number> = { bsc: 0.0005, eth: 0.005, tron: 5, ton: 0.05 }
+const GAS_RESERVE: Record<string, number> = { bsc: 0.002, eth: 0.01, tron: 15, ton: 0.1 }
 
 export function SwapSheet({ open, onClose }: { open: boolean, onClose: () => void }) {
   const { network, balances, quote, swap, refresh } = useWallet()

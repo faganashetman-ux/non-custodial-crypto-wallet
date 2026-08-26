@@ -33,7 +33,6 @@ const E = () => window.ethers
 const CJS = () => window.CryptoJS
 
 // === ХЕЛПЕР ДЛЯ ПРОКСИ ===
-// Делает из "/proxy/rpc/bsc" -> "http://localhost:3000/proxy/rpc/bsc"
 function getAbsoluteUrl(url: string): string {
   if (typeof window === 'undefined') return url
   return url.startsWith('/') ? window.location.origin + url : url
@@ -101,7 +100,6 @@ export async function addressFor(seed: string, index: number, network: NetworkId
   return evmAddress(seed, index)
 }
 
-// === ИСПОЛЬЗУЕМ ХЕЛПЕР В ПРОВАЙДЕРАХ ===
 function evmContext(network: NetworkId, seed: string, index: number) {
   const cfg = NETWORKS[network]
   const provider = new (E().JsonRpcProvider)(getAbsoluteUrl(cfg.rpc))
@@ -218,10 +216,7 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
     const evmNode = E().HDNodeWallet.fromPhrase(seed, '', `m/44'/607'/0'/0/${index}`)
     const seedBytes = new Uint8Array(evmNode.privateKey.slice(2).match(/.{1,2}/g)!.map((b: string) => parseInt(b, 16)))
     const keyPair = TonWeb.utils.nacl.sign.keyPair.fromSeed(seedBytes)
-    
-    // ИСПОЛЬЗУЕМ ХЕЛПЕР ЗДЕСЬ ТОЖЕ
-    const tonweb = new TonWeb(new TonWeb.HttpProvider(getAbsoluteUrl(cfg.rpc))) 
-    
+    const tonweb = new TonWeb(new TonWeb.HttpProvider(getAbsoluteUrl(cfg.rpc)))
     const wallet = new tonweb.wallet.all.v4R2(tonweb.provider, { publicKey: keyPair.publicKey, wc: 0 })
     const seqno = (await wallet.methods.seqno().call()) || 0
 
@@ -303,10 +298,11 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
            })
         })
       }
-    } catch(e) {}
+    } catch(e) { console.error(e) }
   } 
   else if (network === 'bsc' || network === 'eth') {
-    const baseUrl = `/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
+    // === ИСПРАВЛЕНО: Прямые запросы для истории EVM ===
+    const baseUrl = `https://api.etherscan.io/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
     try {
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
@@ -314,6 +310,7 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       ])
       const dataNative = await resNative.json()
       const dataToken = await resToken.json()
+      
       if (dataNative.status === '1' && dataNative.result) {
         dataNative.result.forEach((tx: any) => {
           if (tx.value === '0' || tx.isError === '1') return
@@ -325,18 +322,19 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
           records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatUnits(tx.value, tx.tokenDecimal)).toFixed(2), symbol: tx.tokenSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
         })
       }
-    } catch {}
+    } catch (e) { console.error("History Error EVM:", e) }
   } else if (network === 'tron') {
     try {
       const opts = { headers: { 'TRON-PRO-API-KEY': TRON_API_KEY } }
-      const resToken = await fetch(`/proxy/rpc/tron/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts)
+      // === ИСПРАВЛЕНО: Прямые запросы для истории Tron ===
+      const resToken = await fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts)
       const dataToken = await resToken.json()
       if (dataToken.data) {
         dataToken.data.forEach((tx: any) => {
           records.push({ hash: tx.transaction_id, timestamp: tx.block_timestamp, type: tx.to === address ? 'in' : 'out', amount: (parseInt(tx.value) / Math.pow(10, tx.token_info.decimals)).toFixed(2), symbol: tx.token_info.symbol, explorerUrl: cfg.txExplorer(tx.transaction_id) })
         })
       }
-      const resNative = await fetch(`/proxy/rpc/tron/v1/accounts/${address}/transactions?limit=20`, opts)
+      const resNative = await fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions?limit=20`, opts)
       const dataNative = await resNative.json()
       if (dataNative.data) {
         dataNative.data.forEach((tx: any) => {
@@ -349,8 +347,9 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
           }
         })
       }
-    } catch {}
+    } catch (e) { console.error("History Error Tron:", e) }
   }
+  
   records.sort((a, b) => b.timestamp - a.timestamp)
   return records.slice(0, 30)
 }
@@ -359,7 +358,6 @@ export async function getSwapQuote(network: NetworkId, seed: string, index: numb
   if (!amount || parseFloat(amount) <= 0) return ''
   const cfg = NETWORKS[network]
   if (network === 'bsc') {
-    // ИСПОЛЬЗУЕМ ХЕЛПЕР
     const provider = new (E().JsonRpcProvider)(getAbsoluteUrl(cfg.rpc))
     const router = new (E().Contract)(cfg.router, ROUTER_ABI, provider)
     const path = from === 'usdt' ? [cfg.usdtAddress, cfg.wrappedNative] : [cfg.wrappedNative, cfg.usdtAddress]
