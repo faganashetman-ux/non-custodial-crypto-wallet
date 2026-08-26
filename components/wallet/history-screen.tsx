@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, ExternalLink, Loader2, ChevronDown } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ExternalLink, Loader2, ChevronDown, Ghost, AlertCircle } from 'lucide-react'
 import { useWallet } from './wallet-provider'
 import { useI18n } from '@/lib/i18n'
 import { NETWORKS, type NetworkId } from '@/lib/networks'
@@ -11,7 +11,6 @@ import { NetworkSwitcher } from './network-switcher'
 import { cn } from '@/lib/utils'
 
 export function HistoryScreen() {
-  // Добавили totalAccounts, чтобы не рендерить лишние пустые счета
   const { network, allAddresses, totalAccounts } = useWallet()
   const { t } = useI18n()
   const [openIndex, setOpenIndex] = useState<number | null>(null)
@@ -56,14 +55,12 @@ interface AccordionProps {
 }
 
 function AccountHistoryAccordion({ index, address, network, isOpen, onToggle }: AccordionProps) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const { accountNames } = useWallet() 
   const [history, setHistory] = useState<TxRecord[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
-  const cfg = NETWORKS[network]
 
-  // === ИСПРАВЛЕНО: Правильное имя для текущей сети ===
   const currentAccountName = accountNames[network]?.[index] || `${t.dashboard.accountLabel} #${index + 1}`
 
   const handleToggle = async () => {
@@ -79,43 +76,83 @@ function AccountHistoryAccordion({ index, address, network, isOpen, onToggle }: 
     }
   }
 
+  // Красивое форматирование даты (например: 25 авг., 14:30)
+  const formatDate = (ts: number) => {
+    return new Date(ts).toLocaleString(lang === 'ru' ? 'ru-RU' : 'en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    })
+  }
+
   return (
-    <div className="rounded-2xl border border-border bg-card overflow-hidden transition-all">
+    <div className="rounded-2xl border border-border bg-card overflow-hidden transition-all shadow-sm">
       <button onClick={handleToggle} className="flex w-full items-center justify-between p-4 transition hover:bg-muted/50">
         <div className="flex items-center gap-3">
-          <span className="grid size-8 place-items-center rounded-full bg-secondary text-sm font-bold text-secondary-foreground">{index + 1}</span>
+          <span className="grid size-10 place-items-center rounded-full bg-secondary text-sm font-bold text-secondary-foreground">
+            {index + 1}
+          </span>
           <div className="text-left">
-            {/* Вставляем имя счета */}
             <p className="text-sm font-semibold">{currentAccountName}</p>
-            <p className="font-mono text-xs text-muted-foreground">{truncateAddress(address, 6, 4)}</p>
+            <p className="font-mono text-xs text-muted-foreground">{truncateAddress(address, 8, 6)}</p>
           </div>
         </div>
         <ChevronDown className={cn("size-5 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
       </button>
 
       {isOpen && (
-        <div className="border-t border-border bg-muted/20 p-4">
-          {loading && <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> {t.history.loading}</div>}
-          {error && <div className="py-6 text-center text-sm text-destructive">{t.history.error}</div>}
-          {!loading && !error && history?.length === 0 && <div className="py-8 text-center text-sm text-muted-foreground">{t.history.empty}</div>}
+        <div className="border-t border-border bg-muted/10 p-4">
+          
+          {loading && (
+            <div className="flex flex-col items-center justify-center gap-3 py-10 text-sm font-medium text-muted-foreground">
+              <Loader2 className="size-6 animate-spin text-primary" /> 
+              {t.history.loading}
+            </div>
+          )}
+          
+          {error && (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-destructive">
+              <AlertCircle className="size-8 opacity-80" />
+              {t.history.error}
+            </div>
+          )}
+          
+          {!loading && !error && history?.length === 0 && (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Ghost className="size-10 opacity-40 mb-2" />
+              {t.history.empty}
+            </div>
+          )}
+
           {!loading && !error && history && history.length > 0 && (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               {history.map((tx) => (
-                <a key={tx.hash} href={tx.explorerUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-xl border border-border/50 bg-background p-3 transition hover:border-primary/30">
-                  <div className="flex items-center gap-3">
-                    <div className={cn("grid size-8 place-items-center rounded-full", tx.type === 'in' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500')}>
-                      {tx.type === 'in' ? <ArrowDownLeft className="size-4" /> : <ArrowUpRight className="size-4" />}
+                <a 
+                  key={tx.hash} 
+                  href={tx.explorerUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between rounded-2xl border border-border bg-background p-4 transition hover:border-primary/40 hover:shadow-md"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={cn("grid size-10 place-items-center rounded-full shadow-inner", tx.type === 'in' ? 'bg-green-500/15 text-green-500' : 'bg-red-500/15 text-red-500')}>
+                      {tx.type === 'in' ? <ArrowDownLeft className="size-5" /> : <ArrowUpRight className="size-5" />}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">{tx.type === 'in' ? t.history.received : t.history.sent}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(tx.timestamp).toLocaleString()}</p>
+                      <p className="text-sm font-bold text-foreground">
+                        {tx.type === 'in' ? t.history.received : t.history.sent}
+                      </p>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {formatDate(tx.timestamp)}
+                      </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={cn("text-sm font-bold", tx.type === 'in' ? 'text-green-500' : '')}>
+                  <div className="text-right flex flex-col items-end">
+                    <p className={cn("text-sm font-black font-mono", tx.type === 'in' ? 'text-green-500' : 'text-foreground')}>
                       {tx.type === 'in' ? '+' : '-'}{tx.amount} {tx.symbol}
                     </p>
-                    <ExternalLink className="mt-1 ml-auto size-3 text-muted-foreground" />
+                    <ExternalLink className="mt-1 size-3.5 text-muted-foreground opacity-50" />
                   </div>
                 </a>
               ))}

@@ -265,7 +265,7 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
   }
 }
 
-// === ИСПРАВЛЕНА ЗАГРУЗКА ИСТОРИИ (ВЕРНУЛИ ПРОКСИ) ===
+// === ПОЧИНЕННАЯ ИСТОРИЯ ===
 export interface TxRecord {
   hash: string
   timestamp: number
@@ -275,16 +275,17 @@ export interface TxRecord {
   explorerUrl: string
 }
 
-// === ИСПРАВЛЕННАЯ ФУНКЦИЯ ИСТОРИИ (СТРОГО ЧЕРЕЗ ПРОКСИ-МОСТ) ===
 export async function fetchHistory(network: NetworkId, address: string): Promise<TxRecord[]> {
   const cfg = NETWORKS[network]
   let records: TxRecord[] = []
   const addrLower = address.toLowerCase()
 
-  if (network === 'ton') {
-    try {
-      const resEvents = await fetch(`/proxy/api/tonapi/v2/accounts/${address}/events?limit=20`)
+  try {
+    if (network === 'ton') {
+      const resEvents = await fetch(`https://tonapi.io/v2/accounts/${address}/events?limit=20`)
+      if (!resEvents.ok) throw new Error('TON API Error')
       const dataEvents = await resEvents.json()
+      
       if (dataEvents.events) {
         dataEvents.events.forEach((ev: any) => {
            ev.actions.forEach((act: any) => {
@@ -300,12 +301,9 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
            })
         })
       }
-    } catch(e) { console.error("TON History Error:", e) }
-  } 
-  else if (network === 'bsc' || network === 'eth') {
-    // ПРОКСИРУЕМ ЗАПРОС К ETHERSCAN V2 (Обход CORS)
-    const baseUrl = `/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
-    try {
+    } 
+    else if (network === 'bsc' || network === 'eth') {
+      const baseUrl = `https://api.etherscan.io/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
         fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
@@ -314,34 +312,35 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       const dataNative = await resNative.json()
       const dataToken = await resToken.json()
       
-      if (dataNative.status === '1' && dataNative.result) {
+      if (dataNative.status === '1' && Array.isArray(dataNative.result)) {
         dataNative.result.forEach((tx: any) => {
           if (tx.value === '0' || tx.isError === '1') return
           records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatEther(tx.value)).toFixed(4), symbol: cfg.nativeSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
         })
       }
-      if (dataToken.status === '1' && dataToken.result) {
+      if (dataToken.status === '1' && Array.isArray(dataToken.result)) {
         dataToken.result.forEach((tx: any) => {
           records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatUnits(tx.value, tx.tokenDecimal)).toFixed(2), symbol: tx.tokenSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
         })
       }
-    } catch (e) { console.error("EVM History Error:", e) }
-  } else if (network === 'tron') {
-    try {
+    } else if (network === 'tron') {
       const opts = { headers: { 'TRON-PRO-API-KEY': TRON_API_KEY } }
-      // ПРОКСИРУЕМ ЗАПРОС К TRONGRID (Обход CORS)
-      const resToken = await fetch(`/proxy/rpc/tron/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts)
+      const [resToken, resNative] = await Promise.all([
+        fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts),
+        fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions?limit=20`, opts)
+      ])
+
       const dataToken = await resToken.json()
       if (dataToken.data) {
         dataToken.data.forEach((tx: any) => {
           records.push({ hash: tx.transaction_id, timestamp: tx.block_timestamp, type: tx.to === address ? 'in' : 'out', amount: (parseInt(tx.value) / Math.pow(10, tx.token_info.decimals)).toFixed(2), symbol: tx.token_info.symbol, explorerUrl: cfg.txExplorer(tx.transaction_id) })
         })
       }
-      const resNative = await fetch(`/proxy/rpc/tron/v1/accounts/${address}/transactions?limit=20`, opts)
+
       const dataNative = await resNative.json()
       if (dataNative.data) {
         dataNative.data.forEach((tx: any) => {
-          if (tx.ret[0].contractRet !== 'SUCCESS') return
+          if (tx.ret?.[0]?.contractRet !== 'SUCCESS') return
           const contract = tx.raw_data.contract[0]
           if (contract.type === 'TransferContract') {
             const val = contract.parameter.value
@@ -350,13 +349,18 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
           }
         })
       }
-    } catch (e) { console.error("Tron History Error:", e) }
+    }
+  } catch (error) {
+    console.error("Fetch History Error:", error)
+    throw new Error('history-failed')
   }
   
   records.sort((a, b) => b.timestamp - a.timestamp)
-  return records.slice(0, 30)
+  const uniqueRecords = Array.from(new Map(records.map(item => [item.hash, item])).values());
+  return uniqueRecords.slice(0, 30)
 }
 
+// === ОБМЕНЫ ===
 export async function getSwapQuote(network: NetworkId, seed: string, index: number, from: 'usdt' | 'native', amount: string): Promise<string> {
   if (!amount || parseFloat(amount) <= 0) return ''
   const cfg = NETWORKS[network]
@@ -378,7 +382,6 @@ export async function getSwapQuote(network: NetworkId, seed: string, index: numb
   throw new Error('unsupported')
 }
 
-// === ИСПРАВЛЕНО: СВОП НА БИНАНСЕ (BNB -> USDT) ===
 export async function executeSwap(network: NetworkId, seed: string, index: number, from: 'usdt' | 'native', amount: string, onStage?: (stage: string) => void): Promise<void> {
   const cfg = NETWORKS[network]
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
@@ -395,7 +398,6 @@ export async function executeSwap(network: NetworkId, seed: string, index: numbe
       onStage?.('swap')
       await (await router.swapExactTokensForETH(amountIn, 0, [cfg.usdtAddress, cfg.wrappedNative], wallet.address, deadline)).wait()
     } else {
-      // ИСПРАВЛЕНО ЗДЕСЬ: Возвращен вызов правильной функции контракта PancakeSwap
       onStage?.('swap')
       await (await router.swapExactETHForTokens(0, [cfg.wrappedNative, cfg.usdtAddress], wallet.address, deadline, { value: E().parseEther(amount) })).wait()
     }
