@@ -23,8 +23,8 @@ const nextConfig = {
       { source: '/proxy/api/binance/:path*', destination: 'https://api.binance.com/:path*' },
       { source: '/proxy/api/etherscan/:path*', destination: 'https://api.etherscan.io/:path*' },
       { source: '/proxy/api/tonapi/:path*', destination: 'https://tonapi.io/:path*' },
-      // === ВОЗВРАЩАЕМ ОФИЦИАЛЬНЫЙ BSCSCAN ===
-      { source: '/proxy/api/bscscan/:path*', destination: 'https://api.bscscan.com/:path*' }
+      // === НОВЫЙ ПРОКСИ ДЛЯ NODEREAL ===
+      { source: '/proxy/api/bsctrace', destination: 'https://api.bsctrace.com/api' }
     ]
   },
 }

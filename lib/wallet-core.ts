@@ -4,6 +4,7 @@ import {
   ROUTER_ABI,
   TRON_API_KEY,
   ETHERSCAN_API_KEY,
+  NODEREAL_API_KEY, // <-- ИМПОРТ НОВОГО КЛЮЧА
   type NetworkId,
 } from './networks'
 // @ts-ignore
@@ -265,6 +266,7 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
   }
 }
 
+// === ИСТОРИЯ ===
 export interface TxRecord {
   hash: string
   timestamp: number
@@ -302,8 +304,8 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } 
     else if (network === 'bsc') {
-      // ИСПОЛЬЗУЕМ BSCSCAN ЧЕРЕЗ НАШ ПРОКСИ + КЛЮЧ ETHERSCAN
-      const baseUrl = getAbsoluteUrl(`/proxy/api/bscscan/api?address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`)
+      // === ИСПРАВЛЕНО: ТЕПЕРЬ СТУЧИМСЯ В NODEREAL BSCTRACE ===
+      const baseUrl = getAbsoluteUrl(`/proxy/api/bsctrace?address=${address}&page=1&offset=20&sort=desc&apikey=${NODEREAL_API_KEY}`)
       
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
