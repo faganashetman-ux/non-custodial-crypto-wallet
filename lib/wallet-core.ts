@@ -32,7 +32,6 @@ export function waitForLibs(timeout = 15000): Promise<void> {
 const E = () => window.ethers
 const CJS = () => window.CryptoJS
 
-// === ХЕЛПЕР ДЛЯ ПРОКСИ ===
 function getAbsoluteUrl(url: string): string {
   if (typeof window === 'undefined') return url
   return url.startsWith('/') ? window.location.origin + url : url
@@ -123,7 +122,7 @@ export async function getPrice(symbol: string): Promise<number> {
   const cached = priceCache.get(symbol)
   if (cached && Date.now() - cached.t < 20000) return cached.v
   try {
-    const res = await fetch(getAbsoluteUrl(`/proxy/api/binance/api/v3/ticker/price?symbol=${symbol}USDT`))
+    const res = await fetch(`/proxy/api/binance/api/v3/ticker/price?symbol=${symbol}USDT`)
     const price = parseFloat((await res.json()).price)
     priceCache.set(symbol, { v: price, t: Date.now() })
     return price
@@ -146,12 +145,11 @@ export async function fetchBalances(network: NetworkId, seed: string, index: num
     const addr = await tonAddress(seed, index)
     try {
       const [resNative, resToken] = await Promise.all([
-        fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${addr}`)),
-        fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${addr}/jettons/${cfg.usdtAddress}`))
+        fetch(`/proxy/api/tonapi/v2/accounts/${addr}`),
+        fetch(`/proxy/api/tonapi/v2/accounts/${addr}/jettons/${cfg.usdtAddress}`)
       ])
       const nativeData = await resNative.json()
       native = (parseInt(nativeData.balance || '0') / 1e9).toFixed(4)
-      
       const tokenData = await resToken.json()
       usdt = (parseInt(tokenData.balance || '0') / 1e6).toFixed(2)
     } catch (e) { console.error("TON Balance Error", e) }
@@ -179,31 +177,23 @@ export async function fetchBalances(network: NetworkId, seed: string, index: num
 
 export async function estimateFee(network: NetworkId, seed: string, index: number, asset: 'usdt' | 'native', recipient: string, amount: string): Promise<string> {
   const cfg = NETWORKS[network]
-  
   if (network === 'tron') {
-    const trx = asset === 'usdt' ? 27.3 : 1.1
-    const price = await getPrice('TRX')
+    const trx = asset === 'usdt' ? 27.3 : 1.1; const price = await getPrice('TRX')
     return `~${trx} TRX ($${(trx * price).toFixed(2)})`
   }
-  
   if (network === 'ton') {
-    const tonGas = asset === 'usdt' ? 0.05 : 0.005
-    const price = await getPrice('TON')
+    const tonGas = asset === 'usdt' ? 0.05 : 0.005; const price = await getPrice('TON')
     return `~${tonGas} TON ($${(tonGas * price).toFixed(2)})`
   }
-
   const { provider, usdt } = evmContext(network, seed, index)
   let gasPrice = BigInt(0), gas = BigInt(0)
-  
   try {
     const feeData = await provider.getFeeData()
     gasPrice = feeData.gasPrice || feeData.maxFeePerGas || E().parseUnits('30', 'gwei')
   } catch { gasPrice = E().parseUnits(network === 'eth' ? '30' : '3', 'gwei') }
-
   try {
     gas = asset === 'usdt' ? await usdt.transfer.estimateGas(recipient, E().parseUnits(amount, cfg.usdtDecimals)) : await provider.estimateGas({ to: recipient, value: E().parseEther(amount) })
   } catch { gas = asset === 'usdt' ? BigInt(65000) : BigInt(21000) }
-
   const feeNative = parseFloat(E().formatEther(gas * gasPrice))
   const price = await getPrice(cfg.binancePriceSymbol)
   return `~${feeNative.toFixed(5)} ${cfg.nativeSymbol} ($${(feeNative * price).toFixed(2)})`
@@ -211,7 +201,6 @@ export async function estimateFee(network: NetworkId, seed: string, index: numbe
 
 export async function sendTransaction(network: NetworkId, seed: string, index: number, asset: 'usdt' | 'native', recipient: string, amount: string): Promise<void> {
   const cfg = NETWORKS[network]
-  
   if (network === 'ton') {
     const evmNode = E().HDNodeWallet.fromPhrase(seed, '', `m/44'/607'/0'/0/${index}`)
     const seedBytes = new Uint8Array(evmNode.privateKey.slice(2).match(/.{1,2}/g)!.map((b: string) => parseInt(b, 16)))
@@ -219,61 +208,36 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
     const tonweb = new TonWeb(new TonWeb.HttpProvider(getAbsoluteUrl(cfg.rpc)))
     const wallet = new tonweb.wallet.all.v4R2(tonweb.provider, { publicKey: keyPair.publicKey, wc: 0 })
     const seqno = (await wallet.methods.seqno().call()) || 0
-
     if (asset === 'native') {
       await wallet.methods.transfer({ secretKey: keyPair.secretKey, toAddress: recipient, amount: TonWeb.utils.toNano(amount), seqno, payload: 'Sent from XIPHER', sendMode: 3 }).send()
     } else {
       const senderAddressStr = await tonAddress(seed, index)
-      const resWallet = await fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${senderAddressStr}/jettons/${cfg.usdtAddress}`))
+      const resWallet = await fetch(`/proxy/api/tonapi/v2/accounts/${senderAddressStr}/jettons/${cfg.usdtAddress}`)
       const jettonData = await resWallet.json()
       if (!jettonData || !jettonData.wallet_address) throw new Error("No USDT balance")
-      
       const userJettonWallet = jettonData.wallet_address.address
       const jettonWalletContract = new TonWeb.token.jetton.JettonWallet(tonweb.provider, { address: userJettonWallet })
       const amountUnits = new TonWeb.utils.BN(Math.floor(parseFloat(amount) * 1e6))
-
       // @ts-ignore
-      const payload = await jettonWalletContract.createTransferBody({
-          tokenAmount: amountUnits,
-          toAddress: new TonWeb.utils.Address(recipient),
-          forwardAmount: TonWeb.utils.toNano('0.01'),
-          forwardPayload: new Uint8Array([0,0,0,0]),
-          responseAddress: new TonWeb.utils.Address(senderAddressStr)
-      })
-
+      const payload = await jettonWalletContract.createTransferBody({ tokenAmount: amountUnits, toAddress: new TonWeb.utils.Address(recipient), forwardAmount: TonWeb.utils.toNano('0.01'), forwardPayload: new Uint8Array([0,0,0,0]), responseAddress: new TonWeb.utils.Address(senderAddressStr) })
       await wallet.methods.transfer({ secretKey: keyPair.secretKey, toAddress: userJettonWallet, amount: TonWeb.utils.toNano('0.05'), seqno, payload, sendMode: 3 }).send()
     }
     return
   }
-
   if (network === 'tron') {
     const tron = tronContext(seed, index)
     if (asset === 'usdt') {
       const contract = await tron.contract().at(cfg.usdtAddress)
       await contract.transfer(recipient, Math.floor(parseFloat(amount) * 1e6)).send()
-    } else {
-      await tron.trx.sendTransaction(recipient, Math.floor(parseFloat(amount) * 1e6))
-    }
+    } else { await tron.trx.sendTransaction(recipient, Math.floor(parseFloat(amount) * 1e6)) }
     return
   }
-
   const { wallet, usdt } = evmContext(network, seed, index)
-  if (asset === 'usdt') {
-    await (await usdt.transfer(recipient, E().parseUnits(amount, cfg.usdtDecimals))).wait()
-  } else {
-    await (await wallet.sendTransaction({ to: recipient, value: E().parseEther(amount) })).wait()
-  }
+  if (asset === 'usdt') { await (await usdt.transfer(recipient, E().parseUnits(amount, cfg.usdtDecimals))).wait() } 
+  else { await (await wallet.sendTransaction({ to: recipient, value: E().parseEther(amount) })).wait() }
 }
 
-// === ПОЛНАЯ ИСТОРИЯ ЧЕРЕЗ ПРОКСИ ===
-export interface TxRecord {
-  hash: string
-  timestamp: number
-  type: 'in' | 'out'
-  amount: string
-  symbol: string
-  explorerUrl: string
-}
+export interface TxRecord { hash: string; timestamp: number; type: 'in' | 'out'; amount: string; symbol: string; explorerUrl: string }
 
 export async function fetchHistory(network: NetworkId, address: string): Promise<TxRecord[]> {
   const cfg = NETWORKS[network]
@@ -282,10 +246,9 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
 
   try {
     if (network === 'ton') {
-      const resEvents = await fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${address}/events?limit=20`))
+      const resEvents = await fetch(`/proxy/api/tonapi/v2/accounts/${address}/events?limit=20`)
       if (!resEvents.ok) throw new Error('TON API Error')
       const dataEvents = await resEvents.json()
-      
       if (dataEvents.events) {
         dataEvents.events.forEach((ev: any) => {
            ev.actions.forEach((act: any) => {
@@ -302,15 +265,17 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
         })
       }
     } 
-    else if (network === 'bsc' || network === 'eth') {
-      const baseUrl = getAbsoluteUrl(`/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`)
+    // === ХАКЕРСКИЙ ОБХОД ETHERSCAN V2 ДЛЯ BSC ===
+    else if (network === 'bsc') {
+      const baseUrl = `https://api.bscscan.com/api?address=${address}&page=1&offset=20&sort=desc`
       
-      const [resNative, resToken] = await Promise.all([
-        fetch(`${baseUrl}&module=account&action=txlist`),
-        fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
-      ])
-      
+      // Делаем запросы последовательно с паузой в 1 секунду, так как мы без API ключа!
+      const resNative = await fetch(`${baseUrl}&module=account&action=txlist`)
       const dataNative = await resNative.json()
+      
+      await new Promise(r => setTimeout(r, 1000))
+      
+      const resToken = await fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
       const dataToken = await resToken.json()
       
       if (dataNative.status === '1' && Array.isArray(dataNative.result)) {
@@ -324,21 +289,41 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
           records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatUnits(tx.value, tx.tokenDecimal)).toFixed(2), symbol: tx.tokenSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
         })
       }
-    } else if (network === 'tron') {
-      const opts = { headers: { 'TRON-PRO-API-KEY': TRON_API_KEY } }
-      
-      const [resToken, resNative] = await Promise.all([
-        fetch(getAbsoluteUrl(`/proxy/rpc/tron/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`), opts),
-        fetch(getAbsoluteUrl(`/proxy/rpc/tron/v1/accounts/${address}/transactions?limit=20`), opts)
+    } 
+    // === ОФИЦИАЛЬНЫЙ ETHERSCAN V2 ДЛЯ ETHEREUM ===
+    else if (network === 'eth') {
+      const baseUrl = `https://api.etherscan.io/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
+      const [resNative, resToken] = await Promise.all([
+        fetch(`${baseUrl}&module=account&action=txlist`),
+        fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
       ])
-
+      const dataNative = await resNative.json()
+      const dataToken = await resToken.json()
+      if (dataNative.status === '1' && Array.isArray(dataNative.result)) {
+        dataNative.result.forEach((tx: any) => {
+          if (tx.value === '0' || tx.isError === '1') return
+          records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatEther(tx.value)).toFixed(4), symbol: cfg.nativeSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
+        })
+      }
+      if (dataToken.status === '1' && Array.isArray(dataToken.result)) {
+        dataToken.result.forEach((tx: any) => {
+          records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatUnits(tx.value, tx.tokenDecimal)).toFixed(2), symbol: tx.tokenSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
+        })
+      }
+    } 
+    // === TRON ===
+    else if (network === 'tron') {
+      const opts = { headers: { 'TRON-PRO-API-KEY': TRON_API_KEY } }
+      const [resToken, resNative] = await Promise.all([
+        fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts),
+        fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions?limit=20`, opts)
+      ])
       const dataToken = await resToken.json()
       if (dataToken.data) {
         dataToken.data.forEach((tx: any) => {
           records.push({ hash: tx.transaction_id, timestamp: tx.block_timestamp, type: tx.to === address ? 'in' : 'out', amount: (parseInt(tx.value) / Math.pow(10, tx.token_info.decimals)).toFixed(2), symbol: tx.token_info.symbol, explorerUrl: cfg.txExplorer(tx.transaction_id) })
         })
       }
-
       const dataNative = await resNative.json()
       if (dataNative.data) {
         dataNative.data.forEach((tx: any) => {
@@ -352,10 +337,7 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
         })
       }
     }
-  } catch (error) {
-    console.error("Fetch History Error:", error)
-    throw new Error('history-failed')
-  }
+  } catch (error) { console.error("Fetch History Error:", error); throw new Error('history-failed') }
   
   records.sort((a, b) => b.timestamp - a.timestamp)
   const uniqueRecords = Array.from(new Map(records.map(item => [item.hash, item])).values());
@@ -386,49 +368,36 @@ export async function getSwapQuote(network: NetworkId, seed: string, index: numb
 export async function executeSwap(network: NetworkId, seed: string, index: number, from: 'usdt' | 'native', amount: string, onStage?: (stage: string) => void): Promise<void> {
   const cfg = NETWORKS[network]
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
-  
   if (network === 'bsc') {
     const { wallet, usdt } = evmContext(network, seed, index)
     const router = new (E().Contract)(cfg.router, ROUTER_ABI, wallet)
     if (from === 'usdt') {
       const amountIn = E().parseUnits(amount, 18)
       if (await usdt.allowance(wallet.address, cfg.router) < amountIn) {
-        onStage?.('approve')
-        await (await usdt.approve(cfg.router, E().MaxUint256)).wait()
+        onStage?.('approve'); await (await usdt.approve(cfg.router, E().MaxUint256)).wait()
       }
-      onStage?.('swap')
-      await (await router.swapExactTokensForETH(amountIn, 0, [cfg.usdtAddress, cfg.wrappedNative], wallet.address, deadline)).wait()
+      onStage?.('swap'); await (await router.swapExactTokensForETH(amountIn, 0, [cfg.usdtAddress, cfg.wrappedNative], wallet.address, deadline)).wait()
     } else {
-      onStage?.('swap')
-      await (await router.swapExactETHForTokens(0, [cfg.wrappedNative, cfg.usdtAddress], wallet.address, deadline, { value: E().parseEther(amount) })).wait()
+      onStage?.('swap'); await (await router.swapExactETHForTokens(0, [cfg.wrappedNative, cfg.usdtAddress], wallet.address, deadline, { value: E().parseEther(amount) })).wait()
     }
     return
   }
-
   if (network === 'tron') {
     const tron = tronContext(seed, index)
-    const router = await tron.contract().at(cfg.router)
-    const usdt = await tron.contract().at(cfg.usdtAddress)
-    const base58 = tron.defaultAddress.base58
-    const amountIn = E().parseUnits(amount, 6).toString()
+    const router = await tron.contract().at(cfg.router); const usdt = await tron.contract().at(cfg.usdtAddress)
+    const base58 = tron.defaultAddress.base58; const amountIn = E().parseUnits(amount, 6).toString()
     const MAX = '115792089237316195423570985008687907853269984665640564039457584007913129639935'
-
     if (from === 'usdt') {
       const allowance = await usdt.allowance(base58, cfg.router).call()
       const allowanceStr = allowance.remaining ? allowance.remaining.toString() : allowance.toString()
       if (BigInt(allowanceStr) < BigInt(amountIn)) {
-        onStage?.('approve')
-        await usdt.approve(cfg.router, MAX).send({ feeLimit: 150000000 })
-        await new Promise((r) => setTimeout(r, 4000))
+        onStage?.('approve'); await usdt.approve(cfg.router, MAX).send({ feeLimit: 150000000 }); await new Promise((r) => setTimeout(r, 4000))
       }
-      onStage?.('swap')
-      await router.swapExactTokensForETH(amountIn, 0, [cfg.usdtAddress, cfg.wrappedNative], base58, deadline).send({ feeLimit: 150000000 })
+      onStage?.('swap'); await router.swapExactTokensForETH(amountIn, 0, [cfg.usdtAddress, cfg.wrappedNative], base58, deadline).send({ feeLimit: 150000000 })
     } else {
-      onStage?.('swap')
-      await router.swapExactETHForTokens(0, [cfg.wrappedNative, cfg.usdtAddress], base58, deadline).send({ callValue: amountIn, feeLimit: 150000000 })
+      onStage?.('swap'); await router.swapExactETHForTokens(0, [cfg.wrappedNative, cfg.usdtAddress], base58, deadline).send({ callValue: amountIn, feeLimit: 150000000 })
     }
     return
   }
-
   throw new Error('unsupported')
 }
