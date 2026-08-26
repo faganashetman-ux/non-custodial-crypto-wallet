@@ -275,6 +275,7 @@ export interface TxRecord {
   explorerUrl: string
 }
 
+// === ИСПРАВЛЕННАЯ ФУНКЦИЯ ИСТОРИИ (СТРОГО ЧЕРЕЗ ПРОКСИ-МОСТ) ===
 export async function fetchHistory(network: NetworkId, address: string): Promise<TxRecord[]> {
   const cfg = NETWORKS[network]
   let records: TxRecord[] = []
@@ -299,16 +300,17 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
            })
         })
       }
-    } catch(e) { console.error("TON History Error", e) }
+    } catch(e) { console.error("TON History Error:", e) }
   } 
   else if (network === 'bsc' || network === 'eth') {
-    // ВЕРНУЛИ ПРОКСИ ДЛЯ ETHERSCAN V2
+    // ПРОКСИРУЕМ ЗАПРОС К ETHERSCAN V2 (Обход CORS)
     const baseUrl = `/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
     try {
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
         fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
       ])
+      
       const dataNative = await resNative.json()
       const dataToken = await resToken.json()
       
@@ -327,6 +329,7 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
   } else if (network === 'tron') {
     try {
       const opts = { headers: { 'TRON-PRO-API-KEY': TRON_API_KEY } }
+      // ПРОКСИРУЕМ ЗАПРОС К TRONGRID (Обход CORS)
       const resToken = await fetch(`/proxy/rpc/tron/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts)
       const dataToken = await resToken.json()
       if (dataToken.data) {
