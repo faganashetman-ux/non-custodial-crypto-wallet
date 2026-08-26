@@ -304,7 +304,7 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } 
     else if (network === 'bsc') {
-      // === ПЕРЕЕХАЛИ НА MORALIS API ===
+      // === ПЕРЕЕХАЛИ НА MORALIS API С ЗАЩИТОЙ ОТ ОШИБОК ===
       const options = {
         headers: {
           'Accept': 'application/json',
@@ -314,7 +314,7 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
 
       const [resNative, resToken] = await Promise.all([
         fetch(`https://deep-index.moralis.io/api/v2.2/${address}?chain=bsc&limit=20`, options),
-        fetch(`https://deep-index.moralis.io/api/v2.2/${address}/erc20/transfers?chain=bsc&contract_addresses%5B%5D=${cfg.usdtAddress}&limit=20`, options)
+        fetch(`https://deep-index.moralis.io/api/v2.2/${address}/erc20/transfers?chain=bsc&contract_addresses=${cfg.usdtAddress}&limit=20`, options)
       ]);
 
       const dataNative = await resNative.json();
@@ -322,28 +322,39 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
 
       if (dataNative.result && Array.isArray(dataNative.result)) {
         dataNative.result.forEach((tx: any) => {
-          if (tx.value === '0' || tx.receipt_status === '0') return; // Игнорируем скам с 0 value и фейлы
-          records.push({
-            hash: tx.hash,
-            timestamp: new Date(tx.block_timestamp).getTime(),
-            type: tx.to_address?.toLowerCase() === addrLower ? 'in' : 'out',
-            amount: parseFloat(E().formatEther(tx.value)).toFixed(4),
-            symbol: cfg.nativeSymbol,
-            explorerUrl: cfg.txExplorer(tx.hash)
-          });
+          try {
+            if (!tx.value || tx.value === '0' || tx.receipt_status === '0') return; 
+            
+            records.push({
+              hash: tx.hash,
+              timestamp: new Date(tx.block_timestamp).getTime(),
+              type: tx.to_address?.toLowerCase() === addrLower ? 'in' : 'out',
+              amount: parseFloat(E().formatEther(tx.value)).toFixed(4),
+              symbol: cfg.nativeSymbol,
+              explorerUrl: cfg.txExplorer(tx.hash)
+            });
+          } catch (e) {
+            console.warn("Ошибка парсинга BNB транзакции:", e);
+          }
         });
       }
 
       if (dataToken.result && Array.isArray(dataToken.result)) {
         dataToken.result.forEach((tx: any) => {
-          records.push({
-            hash: tx.transaction_hash,
-            timestamp: new Date(tx.block_timestamp).getTime(),
-            type: tx.to_address?.toLowerCase() === addrLower ? 'in' : 'out',
-            amount: parseFloat(E().formatUnits(tx.value, tx.token_decimals)).toFixed(2),
-            symbol: tx.token_symbol || 'USDT',
-            explorerUrl: cfg.txExplorer(tx.transaction_hash)
-          });
+          try {
+            if (!tx.value || tx.value === '0') return;
+
+            records.push({
+              hash: tx.transaction_hash,
+              timestamp: new Date(tx.block_timestamp).getTime(),
+              type: tx.to_address?.toLowerCase() === addrLower ? 'in' : 'out',
+              amount: parseFloat(E().formatUnits(tx.value, cfg.usdtDecimals)).toFixed(2), // Берем децималсы из конфига
+              symbol: 'USDT',
+              explorerUrl: cfg.txExplorer(tx.transaction_hash)
+            });
+          } catch (e) {
+            console.warn("Ошибка парсинга USDT транзакции:", e);
+          }
         });
       }
     } 
