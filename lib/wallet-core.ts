@@ -123,7 +123,7 @@ export async function getPrice(symbol: string): Promise<number> {
   const cached = priceCache.get(symbol)
   if (cached && Date.now() - cached.t < 20000) return cached.v
   try {
-    const res = await fetch(`/proxy/api/binance/api/v3/ticker/price?symbol=${symbol}USDT`)
+    const res = await fetch(getAbsoluteUrl(`/proxy/api/binance/api/v3/ticker/price?symbol=${symbol}USDT`))
     const price = parseFloat((await res.json()).price)
     priceCache.set(symbol, { v: price, t: Date.now() })
     return price
@@ -146,8 +146,8 @@ export async function fetchBalances(network: NetworkId, seed: string, index: num
     const addr = await tonAddress(seed, index)
     try {
       const [resNative, resToken] = await Promise.all([
-        fetch(`/proxy/api/tonapi/v2/accounts/${addr}`),
-        fetch(`/proxy/api/tonapi/v2/accounts/${addr}/jettons/${cfg.usdtAddress}`)
+        fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${addr}`)),
+        fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${addr}/jettons/${cfg.usdtAddress}`))
       ])
       const nativeData = await resNative.json()
       native = (parseInt(nativeData.balance || '0') / 1e9).toFixed(4)
@@ -224,7 +224,7 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
       await wallet.methods.transfer({ secretKey: keyPair.secretKey, toAddress: recipient, amount: TonWeb.utils.toNano(amount), seqno, payload: 'Sent from XIPHER', sendMode: 3 }).send()
     } else {
       const senderAddressStr = await tonAddress(seed, index)
-      const resWallet = await fetch(`/proxy/api/tonapi/v2/accounts/${senderAddressStr}/jettons/${cfg.usdtAddress}`)
+      const resWallet = await fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${senderAddressStr}/jettons/${cfg.usdtAddress}`))
       const jettonData = await resWallet.json()
       if (!jettonData || !jettonData.wallet_address) throw new Error("No USDT balance")
       
@@ -265,7 +265,7 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
   }
 }
 
-// === ПОЧИНЕННАЯ ИСТОРИЯ ===
+// === ПОЛНАЯ ИСТОРИЯ ЧЕРЕЗ ПРОКСИ ===
 export interface TxRecord {
   hash: string
   timestamp: number
@@ -282,7 +282,7 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
 
   try {
     if (network === 'ton') {
-      const resEvents = await fetch(`https://tonapi.io/v2/accounts/${address}/events?limit=20`)
+      const resEvents = await fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${address}/events?limit=20`))
       if (!resEvents.ok) throw new Error('TON API Error')
       const dataEvents = await resEvents.json()
       
@@ -303,7 +303,8 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } 
     else if (network === 'bsc' || network === 'eth') {
-      const baseUrl = `https://api.etherscan.io/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
+      const baseUrl = getAbsoluteUrl(`/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`)
+      
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
         fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
@@ -325,9 +326,10 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } else if (network === 'tron') {
       const opts = { headers: { 'TRON-PRO-API-KEY': TRON_API_KEY } }
+      
       const [resToken, resNative] = await Promise.all([
-        fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts),
-        fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions?limit=20`, opts)
+        fetch(getAbsoluteUrl(`/proxy/rpc/tron/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`), opts),
+        fetch(getAbsoluteUrl(`/proxy/rpc/tron/v1/accounts/${address}/transactions?limit=20`), opts)
       ])
 
       const dataToken = await resToken.json()
@@ -360,7 +362,6 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
   return uniqueRecords.slice(0, 30)
 }
 
-// === ОБМЕНЫ ===
 export async function getSwapQuote(network: NetworkId, seed: string, index: number, from: 'usdt' | 'native', amount: string): Promise<string> {
   if (!amount || parseFloat(amount) <= 0) return ''
   const cfg = NETWORKS[network]
