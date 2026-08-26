@@ -122,7 +122,7 @@ export async function getPrice(symbol: string): Promise<number> {
   const cached = priceCache.get(symbol)
   if (cached && Date.now() - cached.t < 20000) return cached.v
   try {
-    const res = await fetch(`/proxy/api/binance/api/v3/ticker/price?symbol=${symbol}USDT`)
+    const res = await fetch(getAbsoluteUrl(`/proxy/api/binance/api/v3/ticker/price?symbol=${symbol}USDT`))
     const price = parseFloat((await res.json()).price)
     priceCache.set(symbol, { v: price, t: Date.now() })
     return price
@@ -145,8 +145,8 @@ export async function fetchBalances(network: NetworkId, seed: string, index: num
     const addr = await tonAddress(seed, index)
     try {
       const [resNative, resToken] = await Promise.all([
-        fetch(`/proxy/api/tonapi/v2/accounts/${addr}`),
-        fetch(`/proxy/api/tonapi/v2/accounts/${addr}/jettons/${cfg.usdtAddress}`)
+        fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${addr}`)),
+        fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${addr}/jettons/${cfg.usdtAddress}`))
       ])
       const nativeData = await resNative.json()
       native = (parseInt(nativeData.balance || '0') / 1e9).toFixed(4)
@@ -223,7 +223,7 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
       await wallet.methods.transfer({ secretKey: keyPair.secretKey, toAddress: recipient, amount: TonWeb.utils.toNano(amount), seqno, payload: 'Sent from XIPHER', sendMode: 3 }).send()
     } else {
       const senderAddressStr = await tonAddress(seed, index)
-      const resWallet = await fetch(`/proxy/api/tonapi/v2/accounts/${senderAddressStr}/jettons/${cfg.usdtAddress}`)
+      const resWallet = await fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${senderAddressStr}/jettons/${cfg.usdtAddress}`))
       const jettonData = await resWallet.json()
       if (!jettonData || !jettonData.wallet_address) throw new Error("No USDT balance")
       
@@ -264,7 +264,6 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
   }
 }
 
-// === ИСПРАВЛЕННАЯ ФУНКЦИЯ ИСТОРИИ ===
 export interface TxRecord {
   hash: string
   timestamp: number
@@ -281,8 +280,10 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
 
   try {
     if (network === 'ton') {
-      const resEvents = await fetch(`/proxy/api/tonapi/v2/accounts/${address}/events?limit=20`)
+      const resEvents = await fetch(getAbsoluteUrl(`/proxy/api/tonapi/v2/accounts/${address}/events?limit=20`))
+      if (!resEvents.ok) throw new Error('TON API Error')
       const dataEvents = await resEvents.json()
+      
       if (dataEvents.events) {
         dataEvents.events.forEach((ev: any) => {
            ev.actions.forEach((act: any) => {
@@ -299,14 +300,17 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
         })
       }
     } 
-    // === НОВОЕ: BLOCKSCOUT ДЛЯ BSC (Полностью бесплатный и без ключей) ===
     else if (network === 'bsc') {
-      const baseUrl = `https://bsc.blockscout.com/api?address=${address}&offset=20&sort=desc`
-      const [resNative, resToken] = await Promise.all([
-        fetch(`${baseUrl}&module=account&action=txlist`),
-        fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
-      ])
+      // === ХИТРОСТЬ ДЛЯ BSC: Официальный API без ключа + задержка от спама ===
+      const baseUrl = `https://api.bscscan.com/api?address=${address}&page=1&offset=20&sort=desc`
+      
+      const resNative = await fetch(`${baseUrl}&module=account&action=txlist`)
       const dataNative = await resNative.json()
+      
+      // Ждем 1.5 секунды, чтобы BscScan не выдал "Max rate limit reached"
+      await new Promise(r => setTimeout(r, 1500))
+      
+      const resToken = await fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
       const dataToken = await resToken.json()
       
       if (dataNative.status === '1' && Array.isArray(dataNative.result)) {
@@ -320,10 +324,9 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
           records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatUnits(tx.value, tx.tokenDecimal)).toFixed(2), symbol: tx.tokenSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
         })
       }
-    } 
-    // === ETHERSCAN V2 ТОЛЬКО ДЛЯ ЭФИРА ===
+    }
     else if (network === 'eth') {
-      const baseUrl = `https://api.etherscan.io/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
+      const baseUrl = getAbsoluteUrl(`/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`)
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
         fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
@@ -345,8 +348,8 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
     } else if (network === 'tron') {
       const opts = { headers: { 'TRON-PRO-API-KEY': TRON_API_KEY } }
       const [resToken, resNative] = await Promise.all([
-        fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts),
-        fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions?limit=20`, opts)
+        fetch(getAbsoluteUrl(`/proxy/rpc/tron/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`), opts),
+        fetch(getAbsoluteUrl(`/proxy/rpc/tron/v1/accounts/${address}/transactions?limit=20`), opts)
       ])
 
       const dataToken = await resToken.json()
