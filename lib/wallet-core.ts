@@ -265,6 +265,7 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
   }
 }
 
+// === ИСПРАВЛЕНА ЗАГРУЗКА ИСТОРИИ (ВЕРНУЛИ ПРОКСИ) ===
 export interface TxRecord {
   hash: string
   timestamp: number
@@ -298,11 +299,11 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
            })
         })
       }
-    } catch(e) { console.error(e) }
+    } catch(e) { console.error("TON History Error", e) }
   } 
   else if (network === 'bsc' || network === 'eth') {
-    // === ИСПРАВЛЕНО: Прямые запросы для истории EVM ===
-    const baseUrl = `https://api.etherscan.io/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
+    // ВЕРНУЛИ ПРОКСИ ДЛЯ ETHERSCAN V2
+    const baseUrl = `/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
     try {
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
@@ -322,19 +323,18 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
           records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatUnits(tx.value, tx.tokenDecimal)).toFixed(2), symbol: tx.tokenSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
         })
       }
-    } catch (e) { console.error("History Error EVM:", e) }
+    } catch (e) { console.error("EVM History Error:", e) }
   } else if (network === 'tron') {
     try {
       const opts = { headers: { 'TRON-PRO-API-KEY': TRON_API_KEY } }
-      // === ИСПРАВЛЕНО: Прямые запросы для истории Tron ===
-      const resToken = await fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts)
+      const resToken = await fetch(`/proxy/rpc/tron/v1/accounts/${address}/transactions/trc20?limit=20&contract_address=${cfg.usdtAddress}`, opts)
       const dataToken = await resToken.json()
       if (dataToken.data) {
         dataToken.data.forEach((tx: any) => {
           records.push({ hash: tx.transaction_id, timestamp: tx.block_timestamp, type: tx.to === address ? 'in' : 'out', amount: (parseInt(tx.value) / Math.pow(10, tx.token_info.decimals)).toFixed(2), symbol: tx.token_info.symbol, explorerUrl: cfg.txExplorer(tx.transaction_id) })
         })
       }
-      const resNative = await fetch(`https://api.trongrid.io/v1/accounts/${address}/transactions?limit=20`, opts)
+      const resNative = await fetch(`/proxy/rpc/tron/v1/accounts/${address}/transactions?limit=20`, opts)
       const dataNative = await resNative.json()
       if (dataNative.data) {
         dataNative.data.forEach((tx: any) => {
@@ -347,7 +347,7 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
           }
         })
       }
-    } catch (e) { console.error("History Error Tron:", e) }
+    } catch (e) { console.error("Tron History Error:", e) }
   }
   
   records.sort((a, b) => b.timestamp - a.timestamp)
@@ -375,6 +375,7 @@ export async function getSwapQuote(network: NetworkId, seed: string, index: numb
   throw new Error('unsupported')
 }
 
+// === ИСПРАВЛЕНО: СВОП НА БИНАНСЕ (BNB -> USDT) ===
 export async function executeSwap(network: NetworkId, seed: string, index: number, from: 'usdt' | 'native', amount: string, onStage?: (stage: string) => void): Promise<void> {
   const cfg = NETWORKS[network]
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20
@@ -391,8 +392,9 @@ export async function executeSwap(network: NetworkId, seed: string, index: numbe
       onStage?.('swap')
       await (await router.swapExactTokensForETH(amountIn, 0, [cfg.usdtAddress, cfg.wrappedNative], wallet.address, deadline)).wait()
     } else {
+      // ИСПРАВЛЕНО ЗДЕСЬ: Возвращен вызов правильной функции контракта PancakeSwap
       onStage?.('swap')
-      await (await router.sendTransaction({ to: cfg.router, value: E().parseEther(amount) })).wait()
+      await (await router.swapExactETHForTokens(0, [cfg.wrappedNative, cfg.usdtAddress], wallet.address, deadline, { value: E().parseEther(amount) })).wait()
     }
     return
   }
