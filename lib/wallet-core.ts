@@ -265,7 +265,6 @@ export async function sendTransaction(network: NetworkId, seed: string, index: n
   }
 }
 
-// === ИСТОРИЯ ===
 export interface TxRecord {
   hash: string
   timestamp: number
@@ -303,12 +302,14 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } 
     else if (network === 'bsc') {
-      // === ПРЯМОЙ ЗАПРОС К БЕСПЛАТНОМУ BLOCKSCOUT (БЕЗ ПРОКСИ!) ===
-      const baseUrl = `https://bsc.blockscout.com/api?address=${address}&offset=20&sort=desc`
+      // ИСПОЛЬЗУЕМ BSCSCAN ЧЕРЕЗ НАШ ПРОКСИ + КЛЮЧ ETHERSCAN
+      const baseUrl = getAbsoluteUrl(`/proxy/api/bscscan/api?address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`)
+      
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
         fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
       ])
+      
       const dataNative = await resNative.json()
       const dataToken = await resToken.json()
       
