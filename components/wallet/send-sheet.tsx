@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Send, Wallet } from 'lucide-react'
+import { Loader2, Send, Wallet, ChevronDown } from 'lucide-react'
 import { BottomSheet } from './bottom-sheet'
 import { useWallet } from './wallet-provider'
 import { useToast } from './toast'
@@ -18,7 +18,7 @@ export function SendSheet({
   open: boolean
   onClose: () => void
 }) {
-  const { network, accountIndex, address, balances, estimateFee, send, refresh, accountNames } = useWallet()
+  const { network, accountIndex, setAccountIndex, totalAccounts, address, balances, estimateFee, send, refresh, accountNames } = useWallet()
   const toast = useToast()
   const { t } = useI18n()
   const cfg = NETWORKS[network]
@@ -34,8 +34,6 @@ export function SendSheet({
 
   const available = asset === 'usdt' ? balances?.usdt ?? '0.00' : balances?.native ?? '0.0000'
   const symbol = asset === 'usdt' ? 'USDT' : cfg.nativeSymbol
-  
-  // === ИСПРАВЛЕНО: Точное имя для текущей сети ===
   const currentAccountName = accountNames[network]?.[accountIndex] || `${t.dashboard.accountLabel} #${accountIndex + 1}`
 
   const reset = () => { setRecipient(''); setAmount(''); setFee(null) }
@@ -80,20 +78,36 @@ export function SendSheet({
 
   return (
     <BottomSheet open={open} onClose={close} title={t.send.title}>
-      <div className="flex flex-col gap-5">
+      {/* ИСПРАВЛЕНО: Добавлен контейнер с max-h, overflow-y-auto и отступом pb-8 */}
+      <div className="flex max-h-[80vh] flex-col gap-5 overflow-y-auto pb-8 pt-2 hide-scrollbar">
         
-        {/* Инфо о счете отправителя с кастомным именем */}
-        <div className="flex items-center justify-between rounded-2xl border border-border bg-muted/30 p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-full bg-primary/10 text-primary">
+        {/* Инфо о счете отправителя */}
+        <div className="flex items-center justify-between rounded-2xl border border-border bg-muted/30 p-4 shadow-sm relative">
+          <div className="flex items-center gap-3 w-full">
+            <div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
               <Wallet className="size-5" />
             </div>
-            <div>
+            <div className="flex-1 min-w-0 relative">
               <p className="text-xs text-muted-foreground">{t.send.fromAccount}</p>
-              <p className="text-sm font-semibold">{currentAccountName}</p>
+              <select
+                value={accountIndex}
+                onChange={(e) => {
+                  setAccountIndex(Number(e.target.value))
+                  setAmount('')
+                  setFee(null)
+                }}
+                className="w-full appearance-none bg-transparent text-sm font-semibold outline-none truncate pr-6 cursor-pointer"
+              >
+                {Array.from({ length: totalAccounts[network] || 10 }).map((_, i) => (
+                  <option key={i} value={i} className="bg-background text-foreground">
+                    {accountNames[network]?.[i] || `${t.dashboard.accountLabel} #${i + 1}`}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0 ml-2">
             <p className="text-xs text-muted-foreground">{t.send.gasBalance}</p>
             <p className="font-mono text-sm font-bold text-foreground">
               {balances?.native ?? '0.0000'} {cfg.nativeSymbol}
@@ -106,8 +120,6 @@ export function SendSheet({
             {(['usdt', 'native'] as const).map((a) => {
               const active = a === asset
               const sym = a === 'usdt' ? 'USDT' : cfg.nativeSymbol
-              
-              // === ИСПРАВЛЕНО: Заменили глючный CoinIcon на прямые картинки ===
               const imgUrl = a === 'usdt' ? '/tether.png' : cfg.logoUrl
 
               return (
@@ -137,7 +149,7 @@ export function SendSheet({
 
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t.send.recipient}</label>
-          <input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="0x... / U..." spellCheck={false} className="w-full rounded-2xl border border-input bg-background p-4 font-mono text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15" />
+          <input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="0x... / T..." spellCheck={false} className="w-full rounded-2xl border border-input bg-background p-4 font-mono text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15" />
         </div>
 
         <div className="min-h-[24px]">
@@ -152,6 +164,7 @@ export function SendSheet({
           {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
           {sending ? t.send.btnSending : t.send.btnConfirm}
         </button>
+
       </div>
     </BottomSheet>
   )

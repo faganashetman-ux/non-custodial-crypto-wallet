@@ -6,7 +6,6 @@ import { BottomSheet } from './bottom-sheet'
 import { useWallet } from './wallet-provider'
 import { useToast } from './toast'
 import { NETWORKS } from '@/lib/networks'
-import { CoinIcon } from './coin-icon'
 import { useI18n, type Dictionary } from '@/lib/i18n'
 
 const GAS_RESERVE: Record<string, number> = { bsc: 0.002, eth: 0.01, tron: 15, ton: 0.1 }
@@ -25,7 +24,6 @@ export function SwapSheet({ open, onClose }: { open: boolean, onClose: () => voi
   const [stage, setStage] = useState<string>('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Блокируем свопы для Эфира и Тона
   const swapDisabled = network === 'eth' || network === 'ton'
   
   const nativeSym = cfg.nativeSymbol
@@ -89,24 +87,47 @@ export function SwapSheet({ open, onClose }: { open: boolean, onClose: () => voi
 
   return (
     <BottomSheet open={open} onClose={close} title={t.swap.title}>
-      {swapDisabled && (
-        <p className="mb-4 rounded-2xl bg-muted px-4 py-3 text-center text-xs leading-relaxed text-muted-foreground">
-          Swaps on {cfg.name} are disabled. Switch to BSC or Tron to swap.
-        </p>
-      )}
+      {/* ИСПРАВЛЕНО: Добавлен контейнер с max-h, overflow-y-auto и отступом pb-8 */}
+      <div className="flex max-h-[80vh] flex-col overflow-y-auto pb-8 pt-2 hide-scrollbar">
+        
+        {swapDisabled && (
+          <p className="mb-4 rounded-2xl bg-muted px-4 py-3 text-center text-xs leading-relaxed text-muted-foreground">
+            Swaps on {cfg.name} are disabled. Switch to BSC or Tron to swap.
+          </p>
+        )}
 
-      <div className="relative flex flex-col gap-2">
-        <SwapBox label={t.swap.youPay} symbol={fromSym} balance={fromBal} value={amountFrom} onChange={(v) => { setAmountFrom(v); runQuote(v) }} onMax={setMax} t={t} />
-        <div className="relative z-10 -my-4 flex justify-center">
-          <button onClick={reverse} className="grid size-10 place-items-center rounded-full border-4 border-card bg-primary text-primary-foreground shadow transition hover:rotate-180"><ArrowUpDown className="size-4" /></button>
+        <div className="relative flex flex-col gap-2">
+          <SwapBox 
+            label={t.swap.youPay} 
+            symbol={fromSym} 
+            balance={fromBal} 
+            value={amountFrom} 
+            onChange={(v) => { setAmountFrom(v); runQuote(v) }} 
+            onMax={setMax} 
+            t={t} 
+            logo={from === 'usdt' ? '/tether.png' : cfg.logoUrl}
+          />
+          <div className="relative z-10 -my-4 flex justify-center">
+            <button onClick={reverse} className="grid size-10 place-items-center rounded-full border-4 border-card bg-primary text-primary-foreground shadow transition hover:rotate-180"><ArrowUpDown className="size-4" /></button>
+          </div>
+          <SwapBox 
+            label={t.swap.youReceive} 
+            symbol={toSym} 
+            balance={toBal} 
+            value={quoting ? '' : amountTo} 
+            placeholder={quoting ? t.swap.calcPlaceholder : '0.0'} 
+            readOnly 
+            t={t} 
+            logo={from === 'usdt' ? cfg.logoUrl : '/tether.png'}
+          />
         </div>
-        <SwapBox label={t.swap.youReceive} symbol={toSym} balance={toBal} value={quoting ? '' : amountTo} placeholder={quoting ? t.swap.calcPlaceholder : '0.0'} readOnly t={t} />
-      </div>
 
-      <button onClick={execute} disabled={busy || swapDisabled} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition active:scale-[0.98] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">
-        {busy ? <Loader2 className="size-5 animate-spin" /> : <Repeat className="size-5" />}
-        {btnLabel}
-      </button>
+        <button onClick={execute} disabled={busy || swapDisabled} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition active:scale-[0.98] hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">
+          {busy ? <Loader2 className="size-5 animate-spin" /> : <Repeat className="size-5" />}
+          {btnLabel}
+        </button>
+        
+      </div>
     </BottomSheet>
   )
 }
@@ -121,9 +142,10 @@ interface SwapBoxProps {
   readOnly?: boolean
   placeholder?: string
   t: Dictionary
+  logo: string
 }
 
-function SwapBox({ label, symbol, balance, value, onChange, onMax, readOnly, placeholder = '0.0', t }: SwapBoxProps) {
+function SwapBox({ label, symbol, balance, value, onChange, onMax, readOnly, placeholder = '0.0', t, logo }: SwapBoxProps) {
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
@@ -131,8 +153,19 @@ function SwapBox({ label, symbol, balance, value, onChange, onMax, readOnly, pla
         <span className="font-mono">{t.common.balance}: {balance} {symbol}</span>
       </div>
       <div className="flex items-center gap-3">
-        <div className="flex shrink-0 items-center gap-2 rounded-full bg-secondary px-3 py-2 text-sm font-bold text-secondary-foreground"><CoinIcon symbol={symbol} size={20} />{symbol}</div>
-        <input type="number" inputMode="decimal" value={value} readOnly={readOnly} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder} className="min-w-0 flex-1 bg-transparent text-right text-2xl font-bold outline-none placeholder:text-muted-foreground/60" />
+        <div className="flex shrink-0 items-center gap-2 rounded-full bg-secondary px-3 py-2 text-sm font-bold text-secondary-foreground">
+          <img src={logo} alt={symbol} className="size-[18px] rounded-full object-cover" />
+          {symbol}
+        </div>
+        <input 
+          type="number" 
+          inputMode="decimal" 
+          value={value} 
+          readOnly={readOnly} 
+          onChange={(e) => onChange?.(e.target.value)} 
+          placeholder={placeholder} 
+          className="min-w-0 flex-1 bg-transparent text-right text-2xl font-bold outline-none placeholder:text-muted-foreground/60" 
+        />
         {onMax && <button onClick={onMax} className="shrink-0 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary transition hover:bg-primary hover:text-primary-foreground">{t.common.max}</button>}
       </div>
     </div>
