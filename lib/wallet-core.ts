@@ -301,16 +301,13 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } 
     else if (network === 'bsc') {
-      // === ХИТРОСТЬ ДЛЯ BSC: Официальный API без ключа + задержка от спама ===
-      const baseUrl = `https://api.bscscan.com/api?address=${address}&page=1&offset=20&sort=desc`
-      
-      const resNative = await fetch(`${baseUrl}&module=account&action=txlist`)
+      // === ИСПРАВЛЕНО: Бесплатный Blockscout для BSC через наш прокси ===
+      const baseUrl = getAbsoluteUrl(`/proxy/api/blockscout-bsc?address=${address}&offset=20&sort=desc`)
+      const [resNative, resToken] = await Promise.all([
+        fetch(`${baseUrl}&module=account&action=txlist`),
+        fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
+      ])
       const dataNative = await resNative.json()
-      
-      // Ждем 1.5 секунды, чтобы BscScan не выдал "Max rate limit reached"
-      await new Promise(r => setTimeout(r, 1500))
-      
-      const resToken = await fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
       const dataToken = await resToken.json()
       
       if (dataNative.status === '1' && Array.isArray(dataNative.result)) {
@@ -324,8 +321,9 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
           records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatUnits(tx.value, tx.tokenDecimal)).toFixed(2), symbol: tx.tokenSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
         })
       }
-    }
+    } 
     else if (network === 'eth') {
+      // Эфир остается на Etherscan V2
       const baseUrl = getAbsoluteUrl(`/proxy/api/etherscan/v2/api?chainid=${cfg.chainId}&address=${address}&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`)
       const [resNative, resToken] = await Promise.all([
         fetch(`${baseUrl}&module=account&action=txlist`),
