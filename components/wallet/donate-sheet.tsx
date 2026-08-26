@@ -137,7 +137,7 @@ export function DonateSheet({ open, onClose }: { open: boolean, onClose: () => v
             {(['usdt', 'native'] as const).map((a) => {
               const active = a === asset
               const sym = a === 'usdt' ? 'USDT' : cfg.nativeSymbol
-              const imgUrl = a === 'usdt' ? 'https://cryptologos.cc/logos/tether-usdt-logo.svg' : cfg.logoUrl
+              const imgUrl = a === 'usdt' ? '/tether.png' : cfg.logoUrl
 
               return (
                 <button

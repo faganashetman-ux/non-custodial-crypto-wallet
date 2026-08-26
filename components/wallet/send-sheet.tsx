@@ -108,7 +108,7 @@ export function SendSheet({
               const sym = a === 'usdt' ? 'USDT' : cfg.nativeSymbol
               
               // === ИСПРАВЛЕНО: Заменили глючный CoinIcon на прямые картинки ===
-              const imgUrl = a === 'usdt' ? 'https://cryptologos.cc/logos/tether-usdt-logo.svg' : cfg.logoUrl
+              const imgUrl = a === 'usdt' ? '/tether.png' : cfg.logoUrl
 
               return (
                 <button

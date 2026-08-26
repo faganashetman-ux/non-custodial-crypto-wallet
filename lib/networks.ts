@@ -43,25 +43,30 @@ const USDT_TRON = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
 export const NETWORKS: Record<NetworkId, NetworkConfig> = {
   bsc: {
     id: 'bsc', chainId: 56, name: 'BNB Smart Chain', shortName: 'BSC', nativeSymbol: 'BNB', nativeName: 'BNB', usdtSymbol: 'USDT', usdtDecimals: 18, binancePriceSymbol: 'BNB', 
-    rpc: '/proxy/rpc/bsc', // <-- СКРЫТЫЙ ПУТЬ
-    usdtAddress: '0x55d398326f99059fF775485246999027B3197955', router: '0x10ED43C718714eb63d5aA57B78B54704E256024E', wrappedNative: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', explorer: (a) => `https://bscscan.com/address/${a}`, txExplorer: (h) => `https://bscscan.com/tx/${h}`, nativeColor: '#f0b90b', logoUrl: 'https://cryptologos.cc/logos/bnb-bnb-logo.svg'
+    rpc: '/proxy/rpc/bsc', 
+    usdtAddress: '0x55d398326f99059fF775485246999027B3197955', router: '0x10ED43C718714eb63d5aA57B78B54704E256024E', wrappedNative: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', explorer: (a) => `https://bscscan.com/address/${a}`, txExplorer: (h) => `https://bscscan.com/tx/${h}`, nativeColor: '#f0b90b', 
+    logoUrl: '/bnb.png' // <-- ЛОКАЛЬНАЯ ИКОНКА
   },
   eth: {
     id: 'eth', chainId: 1, name: 'Ethereum', shortName: 'ETH', nativeSymbol: 'ETH', nativeName: 'Ethereum', usdtSymbol: 'USDT', usdtDecimals: 6, binancePriceSymbol: 'ETH', 
-    rpc: '/proxy/rpc/eth', // <-- СКРЫТЫЙ ПУТЬ
-    usdtAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7', router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', wrappedNative: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', explorer: (a) => `https://etherscan.io/address/${a}`, txExplorer: (h) => `https://etherscan.io/tx/${h}`, nativeColor: '#627eea', logoUrl: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg'
+    rpc: '/proxy/rpc/eth', 
+    usdtAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7', router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', wrappedNative: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', explorer: (a) => `https://etherscan.io/address/${a}`, txExplorer: (h) => `https://etherscan.io/tx/${h}`, nativeColor: '#627eea', 
+    logoUrl: '/eth.png' // <-- ЛОКАЛЬНАЯ ИКОНКА
   },
   tron: {
     id: 'tron', name: 'Tron', shortName: 'TRON', nativeSymbol: 'TRX', nativeName: 'Tron', usdtSymbol: 'USDT', usdtDecimals: 6, binancePriceSymbol: 'TRX', 
-    rpc: '/proxy/rpc/tron', // <-- СКРЫТЫЙ ПУТЬ
-    usdtAddress: USDT_TRON, router: SUNSWAP_ROUTER, wrappedNative: WTRX, explorer: (a) => `https://tronscan.org/#/address/${a}`, txExplorer: (h) => `https://tronscan.org/#/transaction/${h}`, nativeColor: '#ef0027', logoUrl: 'https://cryptologos.cc/logos/tron-trx-logo.svg'
+    rpc: '/proxy/rpc/tron', 
+    usdtAddress: USDT_TRON, router: SUNSWAP_ROUTER, wrappedNative: WTRX, explorer: (a) => `https://tronscan.org/#/address/${a}`, txExplorer: (h) => `https://tronscan.org/#/transaction/${h}`, nativeColor: '#ef0027', 
+    logoUrl: '/tron.png' // <-- ЛОКАЛЬНАЯ ИКОНКА
   },
   ton: {
     id: 'ton', name: 'The Open Network', shortName: 'TON', nativeSymbol: 'TON', nativeName: 'Toncoin', usdtSymbol: 'USDT', usdtDecimals: 6, binancePriceSymbol: 'TON', 
-    rpc: '/proxy/rpc/ton', // <-- СКРЫТЫЙ ПУТЬ
-    usdtAddress: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', router: '', wrappedNative: '', explorer: (a) => `https://tonscan.org/address/${a}`, txExplorer: (h) => `https://tonscan.org/tx/${h}`, nativeColor: '#0098EA', logoUrl: 'https://cryptologos.cc/logos/toncoin-ton-logo.svg'
+    rpc: '/proxy/rpc/ton', 
+    usdtAddress: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs', router: '', wrappedNative: '', explorer: (a) => `https://tonscan.org/address/${a}`, txExplorer: (h) => `https://tonscan.org/tx/${h}`, nativeColor: '#0098EA', 
+    logoUrl: '/ton.png' // <-- ЛОКАЛЬНАЯ ИКОНКА
   }
 }
 
-export const NETWORK_ORDER: NetworkId[] = ['bsc', 'eth', 'tron', 'ton']
+// === ИСПРАВЛЕНО: НОВЫЙ ПОРЯДОК СЕТЕЙ ===
+export const NETWORK_ORDER: NetworkId[] = ['tron', 'bsc', 'ton', 'eth']
 export const ACCOUNT_COUNT = 10
