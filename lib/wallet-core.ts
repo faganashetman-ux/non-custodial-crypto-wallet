@@ -4,7 +4,7 @@ import {
   ROUTER_ABI,
   TRON_API_KEY,
   ETHERSCAN_API_KEY,
-  NODEREAL_API_KEY, // <-- ИМПОРТ НОВОГО КЛЮЧА
+  MORALIS_API_KEY, // <-- ИМПОРТ НОВОГО КЛЮЧА MORALIS
   type NetworkId,
 } from './networks'
 // @ts-ignore
@@ -304,27 +304,47 @@ export async function fetchHistory(network: NetworkId, address: string): Promise
       }
     } 
     else if (network === 'bsc') {
-      // === ИСПРАВЛЕНО: ТЕПЕРЬ СТУЧИМСЯ В NODEREAL BSCTRACE ===
-      const baseUrl = getAbsoluteUrl(`/proxy/api/bsctrace?address=${address}&page=1&offset=20&sort=desc&apikey=${NODEREAL_API_KEY}`)
-      
+      // === ПЕРЕЕХАЛИ НА MORALIS API ===
+      const options = {
+        headers: {
+          'Accept': 'application/json',
+          'X-API-Key': MORALIS_API_KEY
+        }
+      };
+
       const [resNative, resToken] = await Promise.all([
-        fetch(`${baseUrl}&module=account&action=txlist`),
-        fetch(`${baseUrl}&module=account&action=tokentx&contractaddress=${cfg.usdtAddress}`)
-      ])
-      
-      const dataNative = await resNative.json()
-      const dataToken = await resToken.json()
-      
-      if (dataNative.status === '1' && Array.isArray(dataNative.result)) {
+        fetch(`https://deep-index.moralis.io/api/v2.2/${address}?chain=bsc&limit=20`, options),
+        fetch(`https://deep-index.moralis.io/api/v2.2/${address}/erc20/transfers?chain=bsc&contract_addresses%5B%5D=${cfg.usdtAddress}&limit=20`, options)
+      ]);
+
+      const dataNative = await resNative.json();
+      const dataToken = await resToken.json();
+
+      if (dataNative.result && Array.isArray(dataNative.result)) {
         dataNative.result.forEach((tx: any) => {
-          if (tx.value === '0' || tx.isError === '1') return
-          records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatEther(tx.value)).toFixed(4), symbol: cfg.nativeSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
-        })
+          if (tx.value === '0' || tx.receipt_status === '0') return; // Игнорируем скам с 0 value и фейлы
+          records.push({
+            hash: tx.hash,
+            timestamp: new Date(tx.block_timestamp).getTime(),
+            type: tx.to_address?.toLowerCase() === addrLower ? 'in' : 'out',
+            amount: parseFloat(E().formatEther(tx.value)).toFixed(4),
+            symbol: cfg.nativeSymbol,
+            explorerUrl: cfg.txExplorer(tx.hash)
+          });
+        });
       }
-      if (dataToken.status === '1' && Array.isArray(dataToken.result)) {
+
+      if (dataToken.result && Array.isArray(dataToken.result)) {
         dataToken.result.forEach((tx: any) => {
-          records.push({ hash: tx.hash, timestamp: parseInt(tx.timeStamp) * 1000, type: tx.to.toLowerCase() === addrLower ? 'in' : 'out', amount: parseFloat(E().formatUnits(tx.value, tx.tokenDecimal)).toFixed(2), symbol: tx.tokenSymbol, explorerUrl: cfg.txExplorer(tx.hash) })
-        })
+          records.push({
+            hash: tx.transaction_hash,
+            timestamp: new Date(tx.block_timestamp).getTime(),
+            type: tx.to_address?.toLowerCase() === addrLower ? 'in' : 'out',
+            amount: parseFloat(E().formatUnits(tx.value, tx.token_decimals)).toFixed(2),
+            symbol: tx.token_symbol || 'USDT',
+            explorerUrl: cfg.txExplorer(tx.transaction_hash)
+          });
+        });
       }
     } 
     else if (network === 'eth') {
