@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-// ИСПРАВЛЕНО: Добавлен ChevronDown для стрелочки выбора счета
 import { Heart, Loader2, Wallet, Send, ChevronDown } from 'lucide-react'
 import { BottomSheet } from './bottom-sheet'
 import { useWallet } from './wallet-provider'
@@ -16,14 +15,13 @@ const GAS_RESERVE: Record<string, number> = { bsc: 0.0005, eth: 0.005, tron: 5, 
 
 // 👇 ВСТАВЬ СЮДА СВОИ РЕАЛЬНЫЕ АДРЕСА ДЛЯ ДОНАТОВ 👇
 const MY_DONATION_ADDRESSES: Record<string, string> = {
-  bsc: '0x4b1968d3FE315D4741841c658615D948FdfF389D', 
-  eth: '0x4b1968d3FE315D4741841c658615D948FdfF389D', 
-  tron: 'TMf3dSCj5QFCVeK4wtySo34gwq1z58UZSx',     
-  ton: 'UQDGQ57WOXlG6G7TLmL-2sU3Dw_WQlu1ngo8eIpYqFisXvTu'       
+  bsc: '0xТВОЙ_АДРЕС_METAMASK', 
+  eth: '0xТВОЙ_АДРЕС_METAMASK', 
+  tron: 'TТВОЙ_АДРЕС_TRON',     
+  ton: 'EQТВОЙ_АДРЕС_TON'       
 }
 
 export function DonateSheet({ open, onClose }: { open: boolean, onClose: () => void }) {
-  // Добавили setAccountIndex и totalAccounts
   const { network, accountIndex, setAccountIndex, totalAccounts, balances, estimateFee, send, refresh, accountNames } = useWallet()
   const toast = useToast()
   const { t } = useI18n()
@@ -87,16 +85,18 @@ export function DonateSheet({ open, onClose }: { open: boolean, onClose: () => v
 
   return (
     <BottomSheet open={open} onClose={close} title={t.donate.title}>
-      <div className="flex flex-col gap-4">
+      {/* ИСПРАВЛЕНО: Добавлен скролл и отступ pb-8, чтобы кнопка не прилипала к низу */}
+      <div className="flex max-h-[80vh] flex-col gap-4 overflow-y-auto pb-8 pt-2 hide-scrollbar">
         
+        {/* Заголовок с цветом App Store Blue */}
         <div className="flex flex-col items-center justify-center gap-2 text-center pt-2 pb-2">
-          <div className="grid size-14 place-items-center rounded-full bg-red-500/10 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
-            <Heart className="size-7 fill-red-500" />
+          <div className="grid size-14 place-items-center rounded-full bg-[#007AFF]/10 text-[#007AFF] shadow-[0_0_20px_rgba(0,122,255,0.2)]">
+            <Heart className="size-7 fill-[#007AFF]" />
           </div>
           <p className="text-sm font-medium text-muted-foreground">{t.donate.thanks}</p>
         </div>
 
-        {/* === ИСПРАВЛЕНО: Интерактивный выбор счета === */}
+        {/* Выбор счета */}
         <div className="flex items-center justify-between rounded-2xl border border-border bg-muted/30 p-4 shadow-sm relative">
           <div className="flex items-center gap-3 w-full">
             <div className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
@@ -130,6 +130,7 @@ export function DonateSheet({ open, onClose }: { open: boolean, onClose: () => v
           </div>
         </div>
 
+        {/* Выбор сети и монеты */}
         <div className="rounded-2xl border border-border bg-card p-3 shadow-sm flex flex-col gap-3">
           <NetworkSwitcher />
           
@@ -156,6 +157,7 @@ export function DonateSheet({ open, onClose }: { open: boolean, onClose: () => v
           </div>
         </div>
 
+        {/* Сумма */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-muted-foreground">{t.send.amount}</label>
           <div className="relative">
@@ -164,11 +166,13 @@ export function DonateSheet({ open, onClose }: { open: boolean, onClose: () => v
           </div>
         </div>
 
-        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-center">
+        {/* Получатель */}
+        <div className="rounded-2xl border border-[#007AFF]/20 bg-[#007AFF]/5 p-4 text-center">
           <p className="text-xs text-muted-foreground mb-1">Получатель:</p>
-          <p className="font-semibold text-primary">{t.donate.toDev}</p>
+          <p className="font-semibold text-[#007AFF]">{t.donate.toDev}</p>
         </div>
 
+        {/* Расчет комиссии */}
         <div className="min-h-[24px]">
           {isEstimating ? (
             <p className="flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground"><Loader2 className="size-4 animate-spin" /> {t.send.estimating}</p>
@@ -177,7 +181,8 @@ export function DonateSheet({ open, onClose }: { open: boolean, onClose: () => v
           ) : null}
         </div>
 
-        <button onClick={confirm} disabled={sending || !amount || parseFloat(amount) <= 0} className="flex items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-4 text-sm font-bold text-white shadow-[0_4px_15px_rgba(239,68,68,0.3)] transition active:scale-[0.98] hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed">
+        {/* ИСПРАВЛЕНО: Кнопка цвета App Store Blue (#007AFF) */}
+        <button onClick={confirm} disabled={sending || !amount || parseFloat(amount) <= 0} className="flex items-center justify-center gap-2 rounded-2xl bg-[#007AFF] px-4 py-4 text-sm font-bold text-white shadow-[0_4px_15px_rgba(0,122,255,0.3)] transition active:scale-[0.98] hover:bg-[#005BB5] disabled:opacity-50 disabled:cursor-not-allowed">
           {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
           {sending ? t.donate.sending : t.donate.confirm}
         </button>

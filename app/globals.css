@@ -172,3 +172,11 @@
     padding-bottom: max(env(safe-area-inset-bottom), 0px);
   }
 }
+/* Убираем видимый скроллбар, но оставляем прокрутку */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* Для IE и Edge */
+  scrollbar-width: none;  /* Для Firefox */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Для Chrome, Safari и Opera */
+}
