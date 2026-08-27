@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { addressFor } from './wallet-core' // Импортируем твою функцию генерации
+import { addressFor } from './wallet-core'
 import { type NetworkId } from './networks'
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -25,8 +25,7 @@ export async function checkPushStatus(): Promise<boolean> {
   }
 }
 
-// === НОВАЯ ЛОГИКА: Принимаем seed и генерим 40 адресов ===
-export async function subscribeToPushes(seed: string): Promise<boolean> {
+export async function subscribeToPushes(seed: string, totalAccounts: Record<string, number>): Promise<boolean> {
   try {
     const registration = await navigator.serviceWorker.register('/sw.js');
     const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -38,25 +37,21 @@ export async function subscribeToPushes(seed: string): Promise<boolean> {
     });
 
     const subInfo = JSON.parse(JSON.stringify(subscription));
-    
-    // Генерируем все адреса
     const networks: NetworkId[] = ['eth', 'bsc', 'tron', 'ton'];
     const payload = [];
 
-    // Бежим по сетям и 10 аккаунтам
     for (const net of networks) {
-      for (let i = 0; i < 10; i++) {
+      const count = totalAccounts[net] || 10; 
+      for (let i = 0; i < count; i++) {
         const addr = await addressFor(seed, i, net);
         payload.push({
-          wallet_address: addr.toLowerCase(), // Обязательно в нижний регистр для точного поиска
+          wallet_address: addr.toLowerCase(),
           sub_info: subInfo
         });
       }
     }
 
-    // Сохраняем все 40 адресов разом в Supabase (Массовая вставка)
     const { error } = await supabase.from('push_subscriptions').insert(payload);
-
     if (error) throw error;
     return true;
   } catch (error) {
@@ -65,7 +60,6 @@ export async function subscribeToPushes(seed: string): Promise<boolean> {
   }
 }
 
-// === НОВАЯ ЛОГИКА: Отписываем телефон от всех 40 адресов сразу ===
 export async function unsubscribeFromPushes(): Promise<boolean> {
   try {
     const registration = await navigator.serviceWorker.getRegistration('/sw.js');
@@ -75,7 +69,6 @@ export async function unsubscribeFromPushes(): Promise<boolean> {
     if (subscription) {
       const subInfo = JSON.parse(JSON.stringify(subscription));
       
-      // Удаляем из базы ВСЕ записи, привязанные к этому телефону (по endpoint)
       await supabase.from('push_subscriptions')
         .delete()
         .eq('sub_info->>endpoint', subInfo.endpoint); 
@@ -86,5 +79,26 @@ export async function unsubscribeFromPushes(): Promise<boolean> {
   } catch (error) {
     console.error('Push unsubscribe error:', error);
     return false;
+  }
+}
+
+export async function addNewAddressToPushes(seed: string, network: NetworkId, index: number) {
+  try {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+    if (!registration) return;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return;
+
+    const addr = await addressFor(seed, index, network);
+    await supabase.from('push_subscriptions').insert([{
+      wallet_address: addr.toLowerCase(),
+      sub_info: JSON.parse(JSON.stringify(subscription))
+    }]);
+    
+    console.log(`Address ${addr} appended to push database!`);
+  } catch (error) {
+    console.error('Failed to append new address to pushes:', error);
   }
 }

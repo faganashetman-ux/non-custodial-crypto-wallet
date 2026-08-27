@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { Bell, Loader2 } from 'lucide-react'
-import { useToast } from './toast' // <-- ПРОВЕРЬ ЭТОТ ПУТЬ!
+import { useToast } from './toast'
 import { checkPushStatus, subscribeToPushes, unsubscribeFromPushes } from '@/lib/push'
 import { cn } from '@/lib/utils'
 
-export function PushToggleSwitch({ seed }: { seed: string }) {
+export function PushToggleSwitch({ seed, totalAccounts }: { seed: string, totalAccounts: Record<string, number> }) {
   const [isEnabled, setIsEnabled] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSupported, setIsSupported] = useState(true)
@@ -21,20 +21,18 @@ export function PushToggleSwitch({ seed }: { seed: string }) {
   }, [])
 
   const handleToggle = async () => {
-    if (!seed) return // Теперь проверяем наличие сидки
+    if (!seed) return
     setIsLoading(true)
 
     try {
       if (isEnabled) {
-        // Юзер выключает пуши (адрес больше не нужен, удаляем по токену)
         const success = await unsubscribeFromPushes()
         if (success) {
           setIsEnabled(false)
           toast('Уведомления отключены', 'success')
         }
       } else {
-        // Юзер включает пуши (передаем seed для генерации 40 адресов)
-        const success = await subscribeToPushes(seed)
+        const success = await subscribeToPushes(seed, totalAccounts)
         if (success) {
           setIsEnabled(true)
           toast('Уведомления включены!', 'success')

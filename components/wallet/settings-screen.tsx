@@ -11,10 +11,7 @@ import { DonateSheet } from './donate-sheet'
 
 export function SettingsScreen() {
   const { t } = useI18n()
-  
-  // === ДОСТАЕМ SEED ИЗ ХУКА К КОШЕЛЬКУ ===
-  const { lock, seed } = useWallet() 
-  
+  const { lock, seed, totalAccounts } = useWallet() 
   const [donateOpen, setDonateOpen] = useState(false) 
 
   return (
@@ -25,7 +22,6 @@ export function SettingsScreen() {
 
       <div className="flex flex-col gap-6 px-4 lg:px-6">
         
-        {/* БЛОК: ДОНАТЫ */}
         <section>
           <h2 className="mb-3 px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {t.donate.title}
@@ -48,7 +44,6 @@ export function SettingsScreen() {
           </div>
         </section>
 
-        {/* БЛОК: Внешний вид и Язык */}
         <section>
           <h2 className="mb-3 px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {t.settingsScreen.preferences}
@@ -76,18 +71,15 @@ export function SettingsScreen() {
           </div>
         </section>
 
-        {/* БЛОК: Безопасность и Уведомления */}
         <section>
           <h2 className="mb-3 px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {t.settingsScreen.security}
           </h2>
           <div className="flex flex-col rounded-3xl border border-border bg-card overflow-hidden">
             
-            {/* === НАШ НОВЫЙ ТУМБЛЕР ПУШЕЙ === */}
             <div className="border-b border-border/50 px-4 py-1">
-              <PushToggleSwitch seed={seed || ''} />
+              <PushToggleSwitch seed={seed || ''} totalAccounts={totalAccounts} />
             </div>
-            {/* ============================== */}
 
             <button 
               onClick={lock}
@@ -109,7 +101,6 @@ export function SettingsScreen() {
 
       </div>
 
-      {/* Вызов шторки */}
       <DonateSheet open={donateOpen} onClose={() => setDonateOpen(false)} />
     </main>
   )

@@ -1,16 +1,17 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { usePostHog } from 'posthog-js/react' // <-- ИМПОРТ POSTHOG
+import { usePostHog } from 'posthog-js/react' 
 import { NETWORKS, type NetworkId } from '@/lib/networks'
 import * as core from '@/lib/wallet-core'
+import { addNewAddressToPushes } from '@/lib/push'
 
 export type WalletStatus = 'loading' | 'setup' | 'locked' | 'unlocked'
 
 interface WalletContextValue {
   status: WalletStatus
   ready: boolean
-  seed: string | null // <-- ДОБАВИЛИ СЮДА
+  seed: string | null 
   network: NetworkId
   accountIndex: number
   balances: core.Balances | null
@@ -70,7 +71,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [totalAccounts, setTotalAccounts] = useState<Record<NetworkId, number>>(defaultTotal)
   const [accountNames, setAccountNames] = useState<Record<NetworkId, Record<number, string>>>(defaultNames)
 
-  // ПОДКЛЮЧАЕМ ХУК АНАЛИТИКИ
   const posthog = usePostHog()
 
   useEffect(() => {
@@ -136,9 +136,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!core.isValidMnemonic(seed)) throw new Error('invalid-seed')
     localStorage.setItem(LS.seed, core.encryptSeed(seed, password))
     
-    // АНАЛИТИКА: Регистрация нового кошелька
     posthog?.capture('wallet_created')
-    
     afterUnlock(seed)
   }, [afterUnlock, posthog])
 
@@ -147,9 +145,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!cipher) throw new Error('no-wallet')
     const seed = core.decryptSeed(cipher, password)
     
-    // АНАЛИТИКА: Разблокировка (Активность)
     posthog?.capture('wallet_unlocked')
-    
     afterUnlock(seed)
   }, [afterUnlock, posthog])
 
@@ -176,6 +172,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     doRefresh(n, newIdx)
   }, [accountIndex, totalAccounts, recomputeAddresses, doRefresh])
 
+  // === ВОТ ТУТ ЖИВЕТ setAccountIndex, НА КОТОРЫЙ РУГАЛСЯ ТАЙПСКРИПТ ===
   const setAccountIndex = useCallback((i: number) => {
     const max = totalAccounts[network]
     const idx = ((i % max) + max) % max
@@ -184,6 +181,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setBalances(null)
     doRefresh(network, idx)
   }, [totalAccounts, network, doRefresh])
+  // ====================================================================
 
   const addAccount = useCallback((name: string) => {
     const netTotal = totalAccounts[network]
@@ -195,6 +193,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(LS.totalAccounts, JSON.stringify(newTotalObj))
     localStorage.setItem(LS.accountNames, JSON.stringify(newNamesObj))
     
+    if (seedRef.current) {
+      addNewAddressToPushes(seedRef.current, network, netTotal)
+    }
+
     recomputeAddresses(network, newTotalObj)
     setAccountIndexState(netTotal)
     localStorage.setItem(LS.index, String(netTotal))
@@ -213,7 +215,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const estimateFee = useCallback((asset: 'usdt' | 'native', recipient: string, amount: string) => core.estimateFee(network, seedRef.current!, accountIndex, asset, recipient, amount), [network, accountIndex])
   
-  // АНАЛИТИКА: Отправка транзакции
   const send = useCallback(async (asset: 'usdt' | 'native', recipient: string, amount: string) => {
     await core.sendTransaction(network, seedRef.current!, accountIndex, asset, recipient, amount)
     posthog?.capture('transaction_sent', { network, asset })
@@ -221,7 +222,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   
   const quote = useCallback((from: 'usdt' | 'native', amount: string) => core.getSwapQuote(network, seedRef.current!, accountIndex, from, amount), [network, accountIndex])
   
-  // АНАЛИТИКА: Выполнение обмена
   const swap = useCallback(async (from: 'usdt' | 'native', amount: string, onStage?: (s: string) => void) => {
     await core.executeSwap(network, seedRef.current!, accountIndex, from, amount, onStage)
     posthog?.capture('swap_executed', { network, from_asset: from })
@@ -235,7 +235,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   return (
     <WalletCtx.Provider value={{
-      status, ready, seed: seedRef.current, network, accountIndex, balances, refreshing, address, allAddresses, // <-- ДОБАВИЛИ СЮДА seed: seedRef.current
+      status, ready, seed: seedRef.current, network, accountIndex, balances, refreshing, address, allAddresses,
       totalAccounts, accountNames, addAccount, renameAccount,
       setNetwork, setAccountIndex, createWallet, unlock, lock, refresh, estimateFee, send, quote, swap, addressForNetwork
     }}>
