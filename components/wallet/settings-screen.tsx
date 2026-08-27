@@ -1,17 +1,21 @@
 'use client'
 
+import { PushToggleSwitch } from './push-toggle-switch'
 import { useState } from 'react'
 import { Globe, Palette, ShieldAlert, LockKeyhole, Heart } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 import { useWallet } from './wallet-provider'
 import { ThemeToggle } from './theme-toggle'
 import { LanguageToggle } from './language-toggle'
-import { DonateSheet } from './donate-sheet' // <-- Импорт новой шторки
+import { DonateSheet } from './donate-sheet' 
 
 export function SettingsScreen() {
   const { t } = useI18n()
-  const { lock } = useWallet()
-  const [donateOpen, setDonateOpen] = useState(false) // <-- Стейт для шторки
+  
+  // === ДОСТАЕМ SEED ИЗ ХУКА К КОШЕЛЬКУ ===
+  const { lock, seed } = useWallet() 
+  
+  const [donateOpen, setDonateOpen] = useState(false) 
 
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-2xl flex-col pb-24">
@@ -21,7 +25,7 @@ export function SettingsScreen() {
 
       <div className="flex flex-col gap-6 px-4 lg:px-6">
         
-        {/* НОВОЕ: ДОНАТЫ */}
+        {/* БЛОК: ДОНАТЫ */}
         <section>
           <h2 className="mb-3 px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {t.donate.title}
@@ -72,12 +76,19 @@ export function SettingsScreen() {
           </div>
         </section>
 
-        {/* БЛОК: Безопасность */}
+        {/* БЛОК: Безопасность и Уведомления */}
         <section>
           <h2 className="mb-3 px-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             {t.settingsScreen.security}
           </h2>
           <div className="flex flex-col rounded-3xl border border-border bg-card overflow-hidden">
+            
+            {/* === НАШ НОВЫЙ ТУМБЛЕР ПУШЕЙ === */}
+            <div className="border-b border-border/50 px-4 py-1">
+              <PushToggleSwitch seed={seed || ''} />
+            </div>
+            {/* ============================== */}
+
             <button 
               onClick={lock}
               className="flex w-full items-center justify-between p-4 transition hover:bg-muted/50 text-left"

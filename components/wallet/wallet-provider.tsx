@@ -10,6 +10,7 @@ export type WalletStatus = 'loading' | 'setup' | 'locked' | 'unlocked'
 interface WalletContextValue {
   status: WalletStatus
   ready: boolean
+  seed: string | null // <-- ДОБАВИЛИ СЮДА
   network: NetworkId
   accountIndex: number
   balances: core.Balances | null
@@ -234,7 +235,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   return (
     <WalletCtx.Provider value={{
-      status, ready, network, accountIndex, balances, refreshing, address, allAddresses,
+      status, ready, seed: seedRef.current, network, accountIndex, balances, refreshing, address, allAddresses, // <-- ДОБАВИЛИ СЮДА seed: seedRef.current
       totalAccounts, accountNames, addAccount, renameAccount,
       setNetwork, setAccountIndex, createWallet, unlock, lock, refresh, estimateFee, send, quote, swap, addressForNetwork
     }}>
